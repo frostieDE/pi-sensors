@@ -28,7 +28,7 @@ signal.signal(signal.SIGTERM, handler_stop_signals)
 ##################################################
 # CONFIGURATION
 ##################################################
-def config(verbosity, disable_influx):
+def config(verbosity, disable_influx, test_mode):
     logger = logging.getLogger()
 
     levels = {
@@ -48,12 +48,25 @@ def config(verbosity, disable_influx):
     INFLUX_USER_ENV = 'INFLUX_USER'
     INFLUX_PASS_ENV = 'INFLUX_PASS'
     INFLUX_DB_ENV = 'INFLUX_DB'
+    ROOM_ENV = 'ROOM'
+    SENSOR_ENV = 'SENSOR'
     
     if PIN_ENV in os.environ:
         pin = os.environ[PIN_ENV]
     else:
         logger.error('You must specify DHT22_PIN environment variable')
         quit(1)
+
+    if ROOM_ENV in os.environ:
+        room = os.environ[ROOM_ENV]
+    else:
+        logger.error('You must specify a room name');
+        quit(1);
+
+    if SENSOR_ENV in os.environ:
+        sensor_name = os.environ[SENSOR_ENV]
+    else:
+        sensor_name = None
 
     if disable_influx is not True:
 
@@ -91,31 +104,39 @@ def config(verbosity, disable_influx):
     else:
         client = None
 
-    sensor = Adafruit_DHT.DHT22
+    if test_mode is True:
+        sensor = None
+    else:
+        sensor = Adafruit_DHT.DHT22
 
-    return (logger, sensor, pin, client)
+    return (logger, room, sensor_name, pin, sensor, client)
 
 ##################################################
 # MAIN LOOP
 ##################################################
-def loop(logger, sensor, pin, client = None):
+def loop(logger, room, sensor_name, pin, sensor = None, client = None):
     global isRunning
 
     logger.info('Starting main loop')
 
     while isRunning:
-        logger.info('Reading sensor')
-        humidity, temperature = Adafruit_DHT.read_retry(sensor, pin);
-        logger.info("Temperature: %s" % temperature)
-        logger.info("Humidity: %s" % humidity)
-        logger.info('---');
+        logger.debug('Reading sensor')
+        if sensor is not None:
+            humidity, temperature = Adafruit_DHT.read_retry(sensor, pin);
+        else:
+            humidity = 48.5
+            temperature = 24
+        logger.debug("Temperature: %s" % temperature)
+        logger.debug("Humidity: %s" % humidity)
+        logger.debug('---');
 
         current_time = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
         json_body = [
             {
                 "measurement": "temperature",
                 "tags": {
-                    "room": "Room One"    
+                    "room": room,
+                    "sensor": sensor_name
                 },
                 "time": current_time,
                 "fields": {
@@ -125,7 +146,8 @@ def loop(logger, sensor, pin, client = None):
             {
                 "measurement": "humidity",
                 "tags": {
-                    "room": "Room One"    
+                    "room": room,
+                    "sensor": sensor_name
                 },
                 "time": current_time,
                 "fields": {
@@ -136,7 +158,7 @@ def loop(logger, sensor, pin, client = None):
         logger.debug(json_body)
 
         if client is not None:
-            logger.info('Log to InfluxDB')
+            logger.debug('Log to InfluxDB')
             client.write_points(json_body)
 
         time.sleep(2)
@@ -148,8 +170,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Read DHT22 sensor and log to InfluxDB")
     parser.add_argument('--verbose', '-v', action='count')
     parser.add_argument('--disable-influx', action='store_true')
+    parser.add_argument('--test-mode', action='store_true')
 
     args = parser.parse_args(sys.argv[1:])
 
-    logger, sensor, pin, client = config(args.verbose, args.disable_influx)
-    loop(logger, sensor, pin, client)
+    logger, room, sensor_name, pin, sensor, client = config(args.verbose, args.disable_influx, args.test_mode)
+    loop(logger, room, sensor_name, pin, sensor, client)
