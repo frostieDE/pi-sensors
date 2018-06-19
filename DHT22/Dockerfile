@@ -7,7 +7,7 @@ RUN apk update && apk upgrade && \
     git clone https://github.com/adafruit/Adafruit_Python_DHT.git && \
     cd Adafruit_Python_DHT && \
     python3 setup.py install --force-pi2 && \
-    pip install paho-mqtt && \
+    pip3 install paho-mqtt && \
     apk del .build-deps
 
 COPY DHT22.py /usr/bin/DHT22.py
