@@ -13,4 +13,4 @@ RUN apk update && apk upgrade && \
 COPY DHT22.py /usr/bin/DHT22.py
 RUN chmod +x /usr/bin/DHT22.py
 
-ENTRYPOINT /usr/bin/DHT22.py
+CMD /usr/bin/DHT22.py
