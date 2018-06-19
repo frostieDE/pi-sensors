@@ -7,9 +7,14 @@ import os
 import signal
 import sys
 import time
+import paho.mqtt.client as mqtt
 
-from influxdb import InfluxDBClient
 from datetime import datetime
+
+##################################################
+# GLOBAL CONFIG
+##################################################
+caFile = '/ssl/ca_certs.pem'
 
 ##################################################
 # HANDLE SIGTERM
@@ -29,6 +34,8 @@ signal.signal(signal.SIGTERM, handler_stop_signals)
 # CONFIGURATION
 ##################################################
 def config(verbosity, disable_influx, test_mode):
+    global caFile
+
     logger = logging.getLogger()
 
     levels = {
@@ -43,13 +50,12 @@ def config(verbosity, disable_influx, test_mode):
         logging.basicConfig(level=logging_level, format='[%(levelname)s] %(message)s')
 
     PIN_ENV = 'DHT22_PIN'
-    INFLUX_HOST_ENV = 'INFLUX_HOST'
-    INFLUX_PORT_ENV = 'INFLUX_PORT'
-    INFLUX_USER_ENV = 'INFLUX_USER'
-    INFLUX_PASS_ENV = 'INFLUX_PASS'
-    INFLUX_DB_ENV = 'INFLUX_DB'
-    ROOM_ENV = 'ROOM'
-    SENSOR_ENV = 'SENSOR'
+    TOPIC_ENV = 'TOPIC'
+    MQTT_HOST_ENV = 'MQTT_HOST'
+    MQTT_PORT_ENV = 'MQTT_PORT'
+    MQTT_USER_ENV = 'MQTT_USER'
+    MQTT_PASS_ENV = 'MQTT_PASS'
+    MQTT_TLS_ENV = 'MQTT_TLS'
     
     if PIN_ENV in os.environ:
         pin = os.environ[PIN_ENV]
@@ -57,50 +63,56 @@ def config(verbosity, disable_influx, test_mode):
         logger.error('You must specify DHT22_PIN environment variable')
         quit(1)
 
-    if ROOM_ENV in os.environ:
-        room = os.environ[ROOM_ENV]
+    if TOPIC_ENV in os.environ:
+        topic = os.environ[TOPIC_ENV]
     else:
-        logger.error('You must specify a room name');
+        logger.error('You must specify a MQTT topic');
         quit(1);
-
-    if SENSOR_ENV in os.environ:
-        sensor_name = os.environ[SENSOR_ENV]
-    else:
-        sensor_name = None
 
     if disable_influx is not True:
 
-        if INFLUX_HOST_ENV in os.environ:
-            influx_host = os.environ[INFLUX_HOST_ENV]
+        if MQTT_HOST_ENV in os.environ:
+            mqtt_host = os.environ[MQTT_HOST_ENV]
         else:
             logger.warning("Use default influx host: localhost");
-            influx_host = 'localhost'
+            mqtt_host = 'localhost'
 
-        if INFLUX_PORT_ENV in os.environ:
-            influx_port = os.environ[INFLUX_PORT_ENV]
+        if MQTT_PORT_ENV in os.environ:
+            mqtt_port = os.environ[MQTT_PORT_ENV]
         else:
             logger.warning("Use default influx port: 8086");
-            influx_port = 8086
+            mqtt_port = 8086
 
-        if INFLUX_USER_ENV in os.environ:
-            influx_user = os.environ[INFLUX_USER_ENV]
+        if MQTT_USER_ENV in os.environ:
+            mqtt_user = os.environ[MQTT_USER_ENV]
         else:
             logger.warning("Use default influx user: root");
-            influx_user = 'root'
+            mqtt_user = 'root'
 
-        if INFLUX_PASS_ENV in os.environ:
-            influx_password = os.environ[INFLUX_PASS_ENV]
+        if MQTT_PASS_ENV in os.environ:
+            mqtt_password = os.environ[MQTT_PASS_ENV]
         else:
             logger.warning("Use default influx password: root");
-            influx_password = 'root'
+            mqtt_password = 'root'
 
-        if INFLUX_DB_ENV in os.environ:
-            influx_db = os.environ[INFLUX_DB_ENV]
+        if MQTT_TLS_ENV in os.environ and os.environ[MQTT_TLS_ENV] == "True":
+            mqtt_tls = True
         else:
-            logger.error('You must specify INFLUX_DB_ENV environment variable')
-            quit(1)
+            mqtt_tls = False
 
-        client = InfluxDBClient(influx_host, influx_port, influx_user, influx_password, influx_db)
+        client = mqtt.Client();
+
+        if mqtt_tls == True:
+            client.tls_set(caFile);
+
+        client.enable_logger(logger)
+        client.username_pw_set(mqtt_user, mqtt_password)
+
+        try:
+            client.connect(mqtt_host, mqtt_port)
+        except:
+            logger.error("Failed to connect to MQTT server");
+            quit(2);
     else:
         client = None
 
@@ -109,12 +121,12 @@ def config(verbosity, disable_influx, test_mode):
     else:
         sensor = Adafruit_DHT.DHT22
 
-    return (logger, room, sensor_name, pin, sensor, client)
+    return (logger, topic, pin, sensor, client)
 
 ##################################################
 # MAIN LOOP
 ##################################################
-def loop(logger, room, sensor_name, pin, sensor = None, client = None):
+def loop(logger, topic, pin, sensor = None, mqtt = None):
     global isRunning
 
     logger.info('Starting main loop')
@@ -126,42 +138,24 @@ def loop(logger, room, sensor_name, pin, sensor = None, client = None):
         else:
             humidity = 48.5
             temperature = 24
+
         logger.debug("Temperature: %s" % temperature)
         logger.debug("Humidity: %s" % humidity)
+
+        if mqtt is not None:
+            try:
+                mqtt.publish(topic + "/temperature", temperature)
+                mqtt.publish(topic + "/humidity", humidity)
+            except:
+                logger.error("Publishing to MQTT server failed");
+
         logger.debug('---');
 
-        current_time = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
-        json_body = [
-            {
-                "measurement": "temperature",
-                "tags": {
-                    "room": room,
-                    "sensor": sensor_name
-                },
-                "time": current_time,
-                "fields": {
-                    "value": temperature    
-                }
-            },
-            {
-                "measurement": "humidity",
-                "tags": {
-                    "room": room,
-                    "sensor": sensor_name
-                },
-                "time": current_time,
-                "fields": {
-                    "value": humidity
-                }
-            }
-        ]
-        logger.debug(json_body)
-
-        if client is not None:
-            logger.debug('Log to InfluxDB')
-            client.write_points(json_body)
-
         time.sleep(2)
+
+    if mqtt is not None:
+        logger.debug("Disconnecting from MQTT")
+        mqtt.disconnect()
 
 ##################################################
 # ENTRY POINT
@@ -169,10 +163,10 @@ def loop(logger, room, sensor_name, pin, sensor = None, client = None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Read DHT22 sensor and log to InfluxDB")
     parser.add_argument('--verbose', '-v', action='count')
-    parser.add_argument('--disable-influx', action='store_true')
+    parser.add_argument('--disable-mqtt', action='store_true')
     parser.add_argument('--test-mode', action='store_true')
 
     args = parser.parse_args(sys.argv[1:])
 
-    logger, room, sensor_name, pin, sensor, client = config(args.verbose, args.disable_influx, args.test_mode)
-    loop(logger, room, sensor_name, pin, sensor, client)
+    logger, topic, pin, sensor, client = config(args.verbose, args.disable_mqtt, args.test_mode)
+    loop(logger, topic, pin, sensor, client)

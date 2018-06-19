@@ -14,8 +14,8 @@
     <LaunchProvider>Standard Python launcher</LaunchProvider>
     <EnableNativeCodeDebugging>False</EnableNativeCodeDebugging>
     <Environment>DHT22_PIN=4
-ROOM=Testroom</Environment>
-    <CommandLineArguments>--test-mode --disable-influx -vvv</CommandLineArguments>
+TOPIC=Testroom</Environment>
+    <CommandLineArguments>--test-mode --disable-mqtt -vvv</CommandLineArguments>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <DebugSymbols>true</DebugSymbols>
