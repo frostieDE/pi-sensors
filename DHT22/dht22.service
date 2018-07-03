@@ -1,0 +1,11 @@
+[Unit]
+Description=Temperature sensor
+After=network.service docker.service
+
+[Service]
+Type=simple
+#Restart=always
+ExecStart=/usr/bin/docker run -e DHT22_PIN=4 -e TOPIC=home/room -e MQTT_HOST=your.host -e MQTT_USER=homeassistant -e MQTT_PASS=your-password --privileged frostiede/dht22 /usr/bin/DHT22.py
+
+[Install]
+WantedBy=multi-user.target
