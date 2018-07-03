@@ -29,6 +29,9 @@ TOPIC=Testroom</Environment>
     <Compile Include="DHT22.py" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="dht22.service">
+      <SubType>Code</SubType>
+    </Content>
     <Content Include="Dockerfile" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />

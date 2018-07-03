@@ -32,6 +32,19 @@ signal.signal(signal.SIGINT, handler_stop_signals)
 signal.signal(signal.SIGTERM, handler_stop_signals)
 
 ##################################################
+# MQTT CALLBACKS
+##################################################
+isConnected = False;
+
+def on_connected(client, userdata, flags, rc):
+    global isConnected
+    isConnected = True
+
+def on_disconnected(client, userdata, rc):
+    global isConnected
+    isConnected = False
+
+##################################################
 # CONFIGURATION
 ##################################################
 def config(verbosity, disable_mqtt, test_mode):
@@ -166,6 +179,10 @@ def loop(logger, topic, pin, sensor = None, mqtt = None):
 
         if mqtt is not None:
             try:
+                if isConnected is not True:
+                    logger.info("Reconnecting to MQTT server");
+                    mqtt.reconnect()
+
                 mqtt.publish(topic, json.dumps(json_value))
             except:
                 logger.error("Publishing to MQTT server failed");
