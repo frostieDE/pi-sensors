@@ -1,11 +1,15 @@
 [Unit]
 Description=BMP180 sensor
-After=network.service docker.service
 
 [Service]
 Type=simple
-#Restart=always
-ExecStart=/usr/bin/docker run -e BUS_ADDRESS=0x77 -e TOPIC=home/room -e MQTT_HOST=your.host -e MQTT_USER=homeassistant -e MQTT_PASS=your-password --privileged frostiede/bmp180 /usr/bin/BMP180.py
+Environment=BUS_ADDRESS=0x77
+Environment=TOPIC=home/room
+Environment=MQTT_HOST=your.host
+Environment=MQTT_USER=homeassistant
+Environment=MQTT_PASS=your-password
+Restart=always
+ExecStart=/usr/bin/BMP180.py
 
 [Install]
 WantedBy=multi-user.target
