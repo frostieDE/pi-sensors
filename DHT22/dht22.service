@@ -1,5 +1,5 @@
 [Unit]
-Description=Temperature sensor
+Description=DHT22 sensor
 After=network.service docker.service
 
 [Service]
